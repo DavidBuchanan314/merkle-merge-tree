@@ -1,0 +1,8 @@
+# No external dependencies required!
+# Python 3.7+ standard library is sufficient.
+#
+# For development/testing:
+# - unittest (built-in)
+# - hashlib (built-in)
+# - json (built-in)
+# - dataclasses (built-in in Python 3.7+)
