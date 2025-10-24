@@ -16,8 +16,8 @@ IMPLEMENTATION DETAILS
 ----------------------
 Language: Python 3.7+
 Dependencies: None (pure standard library)
-Lines of Code: ~2,000
-Test Coverage: 33 unit tests, all passing
+Lines of Code: ~2,000 (348 core + 348 tests + 193 examples + ~1,100 docs)
+Test Coverage: 33 test methods, all passing
 
 MAIN COMPONENTS
 ---------------
@@ -61,11 +61,13 @@ DOCUMENTATION
 EXAMPLES
 --------
 - example.py: 8 comprehensive usage examples
+  (empty tree, simple tree, inclusion/exclusion proofs, edge cases, 
+   merging, strings, etc.)
 - Demonstrates: inclusion/exclusion proofs, edge cases, merging, strings
 
 TESTS
 -----
-- test_exclusion_tlog.py: 33 unit tests
+- test_exclusion_tlog.py: 33 test methods across 6 test classes
 - Coverage: hash functions, tree building, proofs, merging, security
 - All tests passing
 
