@@ -40,7 +40,7 @@ If you know a leaf's index, you can immediately know its path.
 
 storage order:
 12a34cb56e78gfd
-(this order means a tree-merge operation uses linear IO)
+(this order means a tree-merge operation uses sequential IO)
 
 (length = 15) = 2^4-1
 
@@ -119,6 +119,33 @@ class Tree:
 			yield self.data[offset:offset+32]
 			offset += 32 + count_trailing_ones(i) * 32 # skip non-leaf entries
 
+	def get_data_entry(self, idx) -> bytes:
+		return self.data[idx*32:idx*32+32]
+
+	def find_left(self, needle):
+		"""
+		find the needle, or if not, the item to the left of where the needle would be
+		(or the leftmost item, if the needle would be to the left of that)
+		"""
+		return self._find_inner(needle, [], 0, len(t0.data) // 32)
+
+	def _find_inner(self, needle, proof, start, end):
+		"""
+		binary search to find the data offset
+		"""
+		mid = start + (end - start) // 2  # this Just Works (!!!)
+		mid_data = self.get_data_entry(mid)
+
+		print(mid_data, start, mid, end)
+
+		if end - start == 1:
+			return mid_data, proof
+	
+		if needle < mid_data:
+			return self._find_inner(needle, proof + [(0, self.get_data_entry(end - 2))], start, mid)
+		else:
+			return self._find_inner(needle, proof + [(1, self.get_data_entry(mid - 1))], mid, end - 1)
+
 	def merge(self, other) -> "Tree":
 		"""
 		merge two trees of equal height n to produce a new tree of height n+1
@@ -149,7 +176,11 @@ class Forest:
 	forests are immutable.
 	"add" operation produces a new forest with the new entry added.
 	"""
-	def __init__(self, trees: Optional[Iterable[Tree]]) -> None:
+	cardinality: int
+	trees: tuple[Tree, ...]
+	root: bytes
+
+	def __init__(self, trees: Optional[Iterable[Tree]]=None) -> None:
 		self.trees = () if trees is None else tuple(trees)
 		h = hashlib.sha256()
 		prev_height = float("Inf")
@@ -205,3 +236,17 @@ if __name__ == "__main__":
 	forest = forest.add(b"H"*32)
 	print(forest)
 
+	t0 = forest.trees[0]
+	print(t0.data)
+	
+	needle, proof = t0.find_left(b"0"*31 + b"0")
+	print(needle, proof)
+	#exit()
+	accumulator = needle
+	for bit, h in proof[::-1]:
+		if bit:
+			accumulator = hashlib.sha256(h + accumulator).digest()
+		else:
+			accumulator = hashlib.sha256(accumulator + h).digest()
+	print(accumulator.hex())
+	assert(accumulator == t0.root)
