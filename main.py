@@ -63,6 +63,21 @@ The log is a sequence of Forest roots.
 
 It would be expensive to check if a new entry was already in the tree, so we implement a "multiset" rather than a classic set - i.e. the same item can be added more than once. But inclusion proofs stop after the first found match.
 
+
+
+
+
+space:
+
+the complete forest, at any given time, occupies O(n) space
+inclusion proofs are O(logn)
+exclusion proofs are  O((logn)^2) aka O(log²n)  (each tree's proof is O(logn) and there are O(logn) trees (worst case))
+
+the forest tree-list size is O(logn)
+a complete log of all forest tree-lists ever would be O(nlogn)
+so if we had a billion entries, that's 1TiB of log - but only 32GB of "active" trees.
+I thiiiiiink storing dead trees is also O(nlogn)
+
 """
 
 import io
@@ -88,9 +103,9 @@ class Tree:
 		self.height = num_hashes.bit_length()
 		if num_hashes == 0 or num_hashes != (2**self.height)-1:
 			raise ValueError("invalid data length")
-		self.cardinality = 2**(self.height-1) # number of leaves
+		self.cardinality = 2**(self.height-1)  # number of leaves
 		self.data = data
-		self.root = data[-32:]
+		self.root = data[-32:]  # XXX: for height=1, "root" will be the leaf value - might wanna think about domain separation
 
 	def __repr__(self) -> str:
 		return f"Tree<height={self.height}, root={self.root.hex()}>"
@@ -132,7 +147,7 @@ class Tree:
 class Forest:
 	"""
 	forests are immutable.
-	"add" operation produces a new tree.
+	"add" operation produces a new forest with the new entry added.
 	"""
 	def __init__(self, trees: Optional[Iterable[Tree]]) -> None:
 		self.trees = () if trees is None else tuple(trees)
@@ -147,7 +162,10 @@ class Forest:
 			cardinality += tree.cardinality
 		self.root = h.digest()
 		self.cardinality = cardinality
-	
+
+	def __repr__(self) -> str:
+		return f"Forest<cardinality={self.cardinality}, root={self.root.hex()}, trees={self.trees}>"
+
 	def get_roots(self) -> Iterable:
 		raise NotImplementedError("TODO")
 
@@ -180,3 +198,10 @@ if __name__ == "__main__":
 
 	forest = forest.add(b"E"*32)
 	print(forest.trees)
+	forest = forest.add(b"F"*32)
+	print(forest.trees)
+	forest = forest.add(b"G"*32)
+	print(forest.trees)
+	forest = forest.add(b"H"*32)
+	print(forest)
+
