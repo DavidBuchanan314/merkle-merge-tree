@@ -52,7 +52,7 @@ An *inclusion* proof for an element is the merkle path back to the root (with th
 
 An exclusion proof for the overall MMT is an array of exclusion proofs for each subtree. A subtree exclusion proof is a pair of *inclusion* proofs for the elements on either side of where the missing element *would* be if it existed (except if the missing element would be on the far left or far right of the tree)
 
-The leaf nodes themselves are hashes of the element object.
+The leaf nodes themselves are hashes of the element object (and the ordering of elements is the sort order of their hashes).
 
 Let's go back in time to an earlier version of the tree:
 
@@ -173,7 +173,7 @@ The hashes forming the tree are serialised in the following order:
 
 This means that merging two trees involves only seqential reads from the "source" trees, and only sequential writes to the "destination" tree.
 
-How the serialised trees are actually stored is an open question. My thought is to give each one a UUID filename and slap it on disk (or maybe sqlite for the smaller trees).
+How the serialised trees are actually stored is an open question. My thought is to give each one a UUID filename and slap it on disk (or maybe sqlite for the smaller trees). It would be tempting to use the subtree root hash as the filename, however it is *theoretically* possible to end up with two subtrees with the same root hash (since we're a multiset), which would complicate garbage collection of "dead" trees.
 
 ## Deferred Merge
 
