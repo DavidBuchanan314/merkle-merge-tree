@@ -2,29 +2,6 @@ r"""
 
 ok. ordered binary tree.
 
-when traversing the tree from the top, you need to know which fork to follow. how do we encode this?
-
-
-
-          4
-         / \
-        /   \
-       /     \
-      /       \
-     /         \
-    2           6  <- "rightmost value of the left subtree"
-   / \         / \
-  /   \       /   \
- 1     3     5     7
-/ \   / \   / \   / \
-1 2   3 4   5 6   7 8
-
-
-Alternatively, you could binary-search the leaves (they are stored linearly - could use regular DB index to accelerate)
-
-If you know a leaf's index, you can immediately know its path.
-
-
           d
          / \
         /   \
@@ -59,8 +36,6 @@ An inclusion proof for a Forest is an inclusion proof for one of its constituent
 An *exclusion* proof for a forest is a tuple of exclusion proofs for each tree.
 
 
-The log is a sequence of Forest roots.
-
 It would be expensive to check if a new entry was already in the tree, so we implement a "multiset" rather than a classic set - i.e. the same item can be added more than once. But inclusion proofs stop after the first found match.
 
 
@@ -81,31 +56,39 @@ I thiiiiiink storing dead trees is also O(nlogn)
 """
 
 import io
+import os
 import heapq # used for heapq.merge
-from typing import Optional, Iterable
+from typing import Optional, Iterable, BinaryIO
 import hashlib
 
 def count_trailing_ones(n: int) -> int:
 	return (n ^ (n + 1)).bit_length() - 1
 
+tree_counter = 0 # for testing
 class Tree:
 	"""
 	the minimal tree has height one and contains a single leaf
 
 	trees are immutable
+
+	note: this used to be an in-memory implementation but then I hacked it up to be backed by a
+	BinaryIO, which in this instance is files on disk.
 	"""
 
-	def __init__(self, data: bytes) -> None:
-		assert(len(data) % 32 == 0)
-		num_hashes, rem = divmod(len(data), 32)
-		if rem != 0:
-			raise ValueError("invalid data length (not a multiple of 32 bytes)")
-		self.height = num_hashes.bit_length()
-		if num_hashes == 0 or num_hashes != (2**self.height)-1:
-			raise ValueError("invalid data length")
+	def __init__(self, data: BinaryIO, height: int) -> None:
+		global tree_counter # for testing
+		tree_counter += 1 # for testing
+		#assert(len(data) % 32 == 0)
+		#num_hashes, rem = divmod(len(data), 32)
+		#if rem != 0:
+		#	raise ValueError("invalid data length (not a multiple of 32 bytes)")
+		#self.height = num_hashes.bit_length()
+		#if num_hashes == 0 or num_hashes != (2**self.height)-1:
+		#	raise ValueError("invalid data length")
+		self.height = height
 		self.cardinality = 2**(self.height-1)  # number of leaves
 		self.data = data
-		self.root = data[-32:]  # XXX: for height=1, "root" will be the leaf value - might wanna think about domain separation
+		self.root = self.get_data_entry((2**self.height)-2)#data[-32:]  # XXX: for height=1, "root" will be the leaf value - might wanna think about domain separation
 
 	def __repr__(self) -> str:
 		return f"Tree<height={self.height}, root={self.root.hex()}>"
@@ -114,20 +97,21 @@ class Tree:
 		"""
 		iterate thru leaves
 		"""
-		offset = 0
+		self.data.seek(0)
 		for i in range(self.cardinality):
-			yield self.data[offset:offset+32]
-			offset += 32 + count_trailing_ones(i) * 32 # skip non-leaf entries
+			yield self.data.read(32)
+			self.data.seek(count_trailing_ones(i) * 32, io.SEEK_CUR)
 
 	def get_data_entry(self, idx) -> bytes:
-		return self.data[idx*32:idx*32+32]
+		self.data.seek(idx*32)
+		return self.data.read(32)
 
 	def find_left(self, needle):
 		"""
 		find the needle, or if not, the item to the left of where the needle would be
 		(or the leftmost item, if the needle would be to the left of that)
 		"""
-		return self._find_inner(needle, [], 0, len(t0.data) // 32)
+		return self._find_inner(needle, [], 0, (2**self.height)-1)
 
 	def _find_inner(self, needle, proof, start, end):
 		"""
@@ -154,7 +138,7 @@ class Tree:
 			raise TypeError("can only merge subtrees")
 		if self.height != other.height:
 			raise ValueError("can only merge trees of the same height")
-		data = io.BytesIO()
+		data = open("./trees/tmp", "wb+")#io.BytesIO()
 		stack = []
 		for i, entry in enumerate(heapq.merge(self, other)):
 			data.write(entry)
@@ -165,7 +149,12 @@ class Tree:
 				h = hashlib.sha256(a+b).digest()
 				data.write(h)
 				stack.append(h)
-		return Tree(data.getvalue())
+		assert(len(stack) == 1)
+		os.rename("./trees/tmp", f"./trees/{stack[0].hex()}.bin")
+		if self.height > 1:
+			os.remove(f"./trees/{self.root.hex()}.bin")
+			os.remove(f"./trees/{other.root.hex()}.bin")
+		return Tree(data, self.height + 1)
 
 	def __or__(self, other) -> "Tree":
 		return self.merge(other)
@@ -203,7 +192,7 @@ class Forest:
 	def add(self, entry: bytes) -> "Forest":
 		if len(entry) != 32:
 			raise ValueError("entry must be 32 bytes long (expects sha256 hash output)")
-		accumulator = Tree(entry) # tree of height 1
+		accumulator = Tree(io.BytesIO(entry), 1) # tree of height 1
 		i = 1
 		while i <= len(self.trees):
 			if self.trees[-i].height == accumulator.height:
@@ -215,10 +204,10 @@ class Forest:
 
 
 if __name__ == "__main__":
-	a = Tree(b"A"*32)
-	b = Tree(b"B"*32)
-	c = Tree(b"C"*32)
-	d = Tree(b"D"*32)
+	a = Tree(io.BytesIO(b"A"*32), 1)
+	b = Tree(io.BytesIO(b"B"*32), 1)
+	c = Tree(io.BytesIO(b"C"*32), 1)
+	d = Tree(io.BytesIO(b"D"*32), 1)
 	x = a|b
 	y = c|d
 	z = x|y
@@ -250,3 +239,31 @@ if __name__ == "__main__":
 			accumulator = hashlib.sha256(accumulator + h).digest()
 	print(accumulator.hex())
 	assert(accumulator == t0.root)
+
+
+	# benchmark!
+	import time
+	start = time.time()
+	f = Forest()
+	NUM_INSERTS = 0x100000
+	for i in range(NUM_INSERTS):
+		k = i.to_bytes(32)
+		f = f.add(k)
+	duration = time.time() - start
+	print(NUM_INSERTS/duration, "MMT inserts per second") # I get 20K inserts per second on my machine (it was closer to 70K when I was doing everything in-memory)
+	print(tree_counter, "total trees")
+
+	"""start = time.time()
+	from atmst.blockstore import MemoryBlockStore
+	from atmst.mst.node_store import NodeStore
+	from atmst.mst.node_wrangler import NodeWrangler
+	bs = MemoryBlockStore()
+	ns = NodeStore(bs)
+	wrangler = NodeWrangler(ns)
+	mst = ns.get_node(None).cid
+	NUM_INSERTS = 0x10000
+	for i in range(NUM_INSERTS):
+		mst = wrangler.put_record(mst, str(i), mst)
+	duration = time.time() - start
+	print(NUM_INSERTS/duration, "MST inserts per second")
+	print(len(bs._state), "stored blocks")"""
